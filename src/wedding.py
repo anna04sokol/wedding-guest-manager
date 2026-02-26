@@ -1,4 +1,10 @@
 from typing import List, Optional
+import pandas as pd
+import os
+import yagmail
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Wedding:
@@ -13,7 +19,8 @@ class Wedding:
             print(f"Guest with email {email} already exists")
             return
 
-        guest: Guest = SpecialGuest(name, email, self) if is_special else Guest(name, email, self)
+        guest: Guest = SpecialGuest(
+            name, email, self) if is_special else Guest(name, email, self)
         invitation: Invitation = Invitation(guest)
         self.invitation_list.append(invitation)
 
@@ -28,6 +35,41 @@ class Wedding:
             if invitation.guest.email == email:
                 return invitation.guest
         return None
+
+    # exporting guests
+    def export_guests_to_csv(self, filepath: str) -> None:
+        data = []
+        for invitation in self.invitation_list:
+            guest = invitation.guest
+            data.append({
+                'name': guest.name,
+                'email': guest.email,
+                'status': invitation.status,
+                'plus_one': getattr(guest, 'plus_one', None).name if hasattr(guest, 'plus_one') and guest.plus_one else '',
+                'inviting_guest_email': getattr(guest, 'inviting_guest_email', None) or ''
+            })
+        df = pd.DataFrame(data)
+        df.to_csv(filepath, index=False)
+
+    def import_guests_from_csv(self, filepath: str) -> None:
+        df = pd.read_csv(filepath)
+        for _, row in df.iterrows():
+            name = row['name']
+            email = row['email']
+            is_special = False
+            if not self.get_guest_by_email(email):
+                self.send_invitation(name, email, is_special=is_special)
+
+
+def send_email_invitation(guest_email, subject, body):
+    # get my gmail email and pass from env variables
+    EMAIL_USER = os.environ.get('EMAIL_USER')
+    EMAIL_PASS = os.environ.get('EMAIL_PASS')
+
+    # set up the yagmail client with my credentials
+    yag = yagmail.SMTP(EMAIL_USER, EMAIL_PASS)
+    # send email to a guest
+    yag.send(to=guest_email, subject=subject, contents=body)
 
 
 class Invitation:
